@@ -37,6 +37,8 @@ env:
   # VS Code's install and build download tools (ripgrep, built-in extensions) from GitHub;
   # signed-in requests avoid GitHub's anonymous rate limit (HTTP 403).
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Lets the optional Windows signing steps see whether a certificate is configured.
+  WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
 
 jobs:
   plan:
@@ -110,6 +112,16 @@ jobs:
           npm_config_arch: ${{ matrix.arch }}
 
       # ---------------------------------------------------------------- Windows
+      - name: Put signtool on PATH (Windows)
+        # VS Code's packaging re-stamps its native modules and calls signtool.exe, which ships
+        # with the Windows SDK on GitHub's runners but is not on PATH.
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $st = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $st) { throw "signtool.exe not found in the Windows SDK" }
+          Write-Host "Using $($st.FullName)"
+          Add-Content -Path $env:GITHUB_PATH -Value (Split-Path $st.FullName)
       - name: Compile (Windows)
         if: matrix.os == 'windows'
         working-directory: vscode
