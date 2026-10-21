@@ -30,6 +30,9 @@ permissions:
 env:
   AITSEV_DEFAULT_SERVER: ${{ vars.AITSEV_PUBLIC_URL || 'https://app.aitsev.com' }}
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  # VS Code's install and build download tools (ripgrep, built-in extensions) from GitHub;
+  # signed-in requests avoid GitHub's anonymous rate limit (HTTP 403).
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   ide:
@@ -38,11 +41,15 @@ jobs:
       matrix:
         include:
           - os: windows
+            arch: x64
             runner: ${{ vars.IDE_RUNNER_WINDOWS || 'windows-latest' }}
           - os: macos
+            arch: arm64
             runner: ${{ vars.IDE_RUNNER_MACOS || 'macos-latest' }}
+          # Ubuntu 24.04: its GCC 13 compiles VS Code's native modules (22.04's GCC 11 is too old).
           - os: linux
-            runner: ${{ vars.IDE_RUNNER_LINUX || 'ubuntu-22.04' }}
+            arch: x64
+            runner: ${{ vars.IDE_RUNNER_LINUX || 'ubuntu-24.04' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 300
     steps:
@@ -83,7 +90,7 @@ jobs:
         shell: bash
         run: npm ci
         env:
-          npm_config_arch: x64
+          npm_config_arch: ${{ matrix.arch }}
 
       # ---------------------------------------------------------------- Windows
       - name: Compile (Windows)
