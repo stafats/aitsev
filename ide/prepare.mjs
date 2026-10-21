@@ -48,13 +48,40 @@ for (const [from, to] of copies) {
   await copyFile(path.join(generated, from), target);
 }
 
-// 3. The installer's output name.
-const issPath = path.join(vscodeDir, "build", "win32", "code.iss");
-const iss = await readFile(issPath, "utf8");
-if (!iss.includes("OutputBaseFilename=VSCodeSetup")) {
-  console.error("build/win32/code.iss changed: cannot set the installer name.");
-  process.exit(1);
+/** Replace text in a VS Code source file; safe to run twice. Fails loudly if VS Code changed. */
+async function patchFile(relative, edits) {
+  const file = path.join(vscodeDir, relative);
+  let text = await readFile(file, "utf8");
+  for (const { find, replace, optional } of edits) {
+    if (text.includes(replace) && !text.includes(find)) continue; // already patched
+    if (!text.includes(find)) {
+      if (optional) continue;
+      console.error(`${relative} changed upstream: could not find\n${find}\nUpdate ide/prepare.mjs for this VS Code version.`);
+      process.exit(1);
+    }
+    text = text.split(find).join(replace);
+  }
+  await writeFile(file, text);
 }
-await writeFile(issPath, iss.replace("OutputBaseFilename=VSCodeSetup", "OutputBaseFilename=Aitsev-Setup"));
+
+// 3. The installer's output name.
+await patchFile("build/win32/code.iss", [
+  { find: "OutputBaseFilename=VSCodeSetup", replace: "OutputBaseFilename=Aitsev-Setup" },
+]);
+
+// 4. Leave GitHub Copilot out of the build: Aitsev is the AI. Its build step needs Copilot's
+//    private SDK, which public builds do not get (the same change VSCodium makes).
+await patchFile("build/gulpfile.vscode.ts", [
+  {
+    find: "\t\t\tcompileNonNativeExtensionsBuildTask,\n\t\t\tcompileCopilotExtensionBuildTask,\n",
+    replace: "\t\t\tcompileNonNativeExtensionsBuildTask,\n",
+  },
+  {
+    find: "packageTask(platform, arch, sourceFolderName, destinationFolderName, opts),\n\t\t\tprepareCopilotRipgrepShimTask(platform, arch, destinationFolderName)\n",
+    replace: "packageTask(platform, arch, sourceFolderName, destinationFolderName, opts)\n",
+  },
+  // Windows file properties of bundled native modules: our company, not Microsoft's.
+  { find: "'CompanyName': 'Microsoft Corporation',", replace: "'CompanyName': 'Aitsev',", optional: true },
+]);
 
 console.log(`Aitsev branding applied to ${vscodeDir} (${product.nameShort} → ${merged.nameShort})`);
