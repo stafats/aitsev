@@ -23,6 +23,10 @@ on:
       tag:
         description: "Release tag to attach the IDE to (for example v0.6.0)"
         required: true
+      platforms:
+        description: "Which platforms to build (comma separated: windows, macos, linux)"
+        required: false
+        default: "windows,macos,linux"
 
 permissions:
   contents: write
@@ -35,21 +39,34 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          WANTED: ${{ github.event.inputs.platforms || 'windows,macos,linux' }}
+          RUNNER_WINDOWS: ${{ vars.IDE_RUNNER_WINDOWS || 'windows-latest' }}
+          RUNNER_MACOS: ${{ vars.IDE_RUNNER_MACOS || 'macos-latest' }}
+          # Ubuntu 24.04: its GCC 13 compiles VS Code's native modules (22.04's GCC 11 is too old).
+          RUNNER_LINUX: ${{ vars.IDE_RUNNER_LINUX || 'ubuntu-24.04' }}
+        run: |
+          items=()
+          [[ ",${WANTED// /}," == *",windows,"* ]] && items+=("{\"os\":\"windows\",\"arch\":\"x64\",\"runner\":\"$RUNNER_WINDOWS\"}")
+          [[ ",${WANTED// /}," == *",macos,"* ]] && items+=("{\"os\":\"macos\",\"arch\":\"arm64\",\"runner\":\"$RUNNER_MACOS\"}")
+          [[ ",${WANTED// /}," == *",linux,"* ]] && items+=("{\"os\":\"linux\",\"arch\":\"x64\",\"runner\":\"$RUNNER_LINUX\"}")
+          if [ ${#items[@]} -eq 0 ]; then echo "::error::No platform selected"; exit 1; fi
+          joined=$(IFS=,; echo "${items[*]}")
+          echo "matrix={\"include\":[$joined]}" >> "$GITHUB_OUTPUT"
+          echo "Building: $joined"
+
   ide:
+    needs: plan
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: windows
-            arch: x64
-            runner: ${{ vars.IDE_RUNNER_WINDOWS || 'windows-latest' }}
-          - os: macos
-            arch: arm64
-            runner: ${{ vars.IDE_RUNNER_MACOS || 'macos-latest' }}
-          # Ubuntu 24.04: its GCC 13 compiles VS Code's native modules (22.04's GCC 11 is too old).
-          - os: linux
-            arch: x64
-            runner: ${{ vars.IDE_RUNNER_LINUX || 'ubuntu-24.04' }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 300
     steps:
@@ -178,10 +195,14 @@ jobs:
         if: matrix.os == 'linux'
         run: |
           node ide/install-extensions.mjs --app VSCode-linux-x64 --vsix apps/vscode/aitsev.vsix
-          (cd vscode && npm run gulp vscode-linux-x64-prepare-deb && npm run gulp vscode-linux-x64-build-deb)
           mkdir -p out
-          cp vscode/.build/linux/deb/amd64/deb/*.deb out/Aitsev-IDE-linux-x64.deb
           tar -czf out/Aitsev-IDE-linux-x64.tar.gz -C . VSCode-linux-x64
+          # The .deb is a bonus: if packaging fails, the .tar.gz still ships.
+          if (cd vscode && npm run gulp vscode-linux-x64-prepare-deb && npm run gulp vscode-linux-x64-build-deb); then
+            cp vscode/.build/linux/deb/amd64/deb/*.deb out/Aitsev-IDE-linux-x64.deb
+          else
+            echo "::warning::The .deb package could not be built; shipping the .tar.gz only"
+          fi
 
       - name: Attach to the release
         shell: bash

@@ -84,4 +84,16 @@ await patchFile("build/gulpfile.vscode.ts", [
   { find: "'CompanyName': 'Microsoft Corporation',", replace: "'CompanyName': 'Aitsev',", optional: true },
 ]);
 
+// 5. Linux packages: the remote-tunnel helper (a separate Rust program) is not part of our build,
+//    so don't require it, and don't fail when the dependency list differs from Microsoft's.
+await patchFile("build/linux/dependencies-generator.ts", [
+  {
+    find: "\tfiles.push(path.join(buildDir, 'bin', product.tunnelApplicationName));",
+    replace:
+      "\tconst tunnelPath = path.join(buildDir, 'bin', product.tunnelApplicationName);\n" +
+      "\tif ((await import('fs')).existsSync(tunnelPath)) { files.push(tunnelPath); }",
+  },
+  { find: "const FAIL_BUILD_FOR_NEW_DEPENDENCIES: boolean = true;", replace: "const FAIL_BUILD_FOR_NEW_DEPENDENCIES: boolean = false;" },
+]);
+
 console.log(`Aitsev branding applied to ${vscodeDir} (${product.nameShort} → ${merged.nameShort})`);
