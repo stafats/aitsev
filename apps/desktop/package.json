@@ -1,0 +1,109 @@
+{
+  "name": "aitsev-desktop",
+  "productName": "Aitsev Studio",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Aitsev Studio: integrations, data migration and CRM tools (Dynamics 365, Salesforce, HubSpot, Zoho) with multi-model AI",
+  "author": "Aitsev",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "test": "vitest run",
+    "start": "node build.mjs && electron .",
+    "smoke": "node build.mjs && electron . --smoke",
+    "dist": "pnpm --filter aitsev-vscode run package && node build.mjs --production && electron-builder --publish never",
+    "build:web": "node build.mjs --web",
+    "release": "pnpm --filter aitsev-vscode run package && node build.mjs --production && electron-builder --publish always"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-updater": "^6.8.9",
+    "esbuild": "^0.25.0",
+    "happy-dom": "^20.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  },
+  "build": {
+    "appId": "com.aitsev.studio",
+    "productName": "Aitsev Studio",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "notarize": true,
+      "icon": "build/icon.png",
+      "artifactName": "Aitsev-Studio-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "artifactName": "Aitsev-Studio-linux.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Aitsev Studio",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Aitsev-Studio-Setup.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "../vscode/aitsev.vsix",
+        "to": "extension/aitsev.vsix"
+      }
+    ],
+    "dmg": {
+      "title": "Install Aitsev Studio"
+    },
+    "publish": null
+  }
+}

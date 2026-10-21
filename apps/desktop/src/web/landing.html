@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Aitsev: several AI models plan, write, test and cross-check your code, integrations and data migrations before you approve them." />
+    <title>Aitsev — verified multi-model AI for code and integrations</title>
+    <link rel="stylesheet" href="landing.css" />
+  </head>
+  <body>
+    <header class="top">
+      <span class="logo">Aitsev</span>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#plans">Plans</a>
+        <a href="/app/#/login">Sign in</a>
+        <a class="cta small" href="/download/windows">Download</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Code · Integrations · Data migration · Dynamics 365</p>
+        <h1>The AI code editor that checks its own work.</h1>
+        <p class="sub">
+          Open your project in Aitsev and chat with it. Pick the model from a dropdown, let the agent
+          edit your files on Autopilot or review every change, and get suggestions in the background.
+          Edits are tested in a sandbox before you see them.
+        </p>
+        <div class="actions">
+          <a class="cta" href="/download/windows">Download for Windows</a>
+          <a class="ghost" href="#get">macOS, Linux, Studio and editor extensions</a>
+          <a class="ghost" href="/app/#/signup">or use it in your browser</a>
+        </div>
+      </section>
+
+      <section id="how" class="steps">
+        <h2>How a task runs</h2>
+        <ol>
+          <li><strong>Plan.</strong> A planner model reads your project and writes a step-by-step plan.</li>
+          <li><strong>Generate in parallel.</strong> Up to three different models implement it independently.</li>
+          <li><strong>Verify.</strong> Your tests run in a network-isolated sandbox; failures go back for repair.</li>
+          <li><strong>Cross-review &amp; judge.</strong> Models review each other's work and a judge picks the best.</li>
+          <li><strong>You approve.</strong> In Supervised mode nothing changes until you accept the diff; on Autopilot changes land directly and Undo is one click away.</li>
+        </ol>
+      </section>
+
+      <section class="grid">
+        <article>
+          <h3>Integrations with auto-mapping</h3>
+          <p>Connect two APIs from OpenAPI, OData or samples. Fields are mapped by rules and two-model voting, then dry-run before any real write.</p>
+        </article>
+        <article>
+          <h3>Safe data migration</h3>
+          <p>Chunked jobs, a dry run required before every real run, and an automatic stop if errors pass 5%.</p>
+        </article>
+        <article>
+          <h3>CRM toolkit</h3>
+          <p>Dynamics 365, Salesforce, HubSpot and Zoho CRM: analyse objects and data quality, then create fields from plain English. Sandbox first.</p>
+        </article>
+        <article>
+          <h3>Your keys stay yours</h3>
+          <p>Credentials are encrypted at rest and never shown again. The desktop app keeps your key in the OS keychain.</p>
+        </article>
+      </section>
+
+      <section id="plans" class="plans">
+        <h2>Plans</h2>
+        <div class="plan-row">
+          <div class="plan"><h3>Free</h3><p>Open models (GPT-OSS, Kimi, DeepSeek, GLM)<br />300k model tokens<br />20 code tasks<br />1,000 migrated records<br /><span>per month</span></p></div>
+          <div class="plan featured"><h3>Pro</h3><p>Adds Claude and GPT<br />5M model tokens<br />500 code tasks<br />100k migrated records<br /><span>per month</span></p></div>
+          <div class="plan"><h3>Team</h3><p>Adds Claude and GPT<br />25M model tokens<br />3,000 code tasks<br />1M migrated records<br /><span>per month</span></p></div>
+          <div class="plan"><h3>Enterprise</h3><p>Unlimited usage<br />Self-hosting<br />Custom models<br /><span>contact us</span></p></div>
+        </div>
+      </section>
+
+      <section id="get" class="get">
+        <h2>Download the Aitsev editor</h2>
+        <p>A full code editor built on VS Code, with Aitsev chat, agent and background suggestions built in. Open a folder, sign in with your browser, and start. No API keys, no model setup. Your VS Code extensions work too.</p>
+        <div class="downloads">
+          <a class="download" href="/download/windows"><strong>Windows</strong><span>Windows 10 and 11 · 64-bit</span></a>
+          <a class="download" href="/download/mac"><strong>macOS</strong><span>Apple silicon</span></a>
+          <a class="download" href="/download/linux"><strong>Linux</strong><span>.deb · 64-bit</span></a>
+        </div>
+        <h3>Aitsev Studio</h3>
+        <p>The desktop app for integrations, data migration and CRM work (Dynamics 365, Salesforce, HubSpot, Zoho CRM). It also adds Aitsev to the editors you already have.</p>
+        <div class="downloads">
+          <a class="download" href="/download/studio-windows"><strong>Studio for Windows</strong><span>64-bit</span></a>
+          <a class="download" href="/download/studio-mac"><strong>Studio for macOS</strong><span>Apple silicon</span></a>
+          <a class="download" href="/download/studio-mac-intel"><strong>Studio for macOS</strong><span>Intel</span></a>
+          <a class="download" href="/download/studio-linux"><strong>Studio for Linux</strong><span>AppImage</span></a>
+        </div>
+        <h3>Already have an editor?</h3>
+        <p>Search for <strong>Aitsev</strong> in the Extensions view of VS Code, Cursor, Kiro or Windsurf, or <a href="/download/vscode">download the extension file</a> and choose <em>Install from VSIX</em>.</p>
+      </section>
+    </main>
+
+    <footer>© Aitsev</footer>
+  </body>
+</html>

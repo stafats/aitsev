@@ -1,0 +1,19 @@
+# Build context is the repository root (the server image also builds the web app).
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.coverage
+**/htmlcov
+**/*.db
+**/*.db-*
+**/.env
+**/dist
+**/dist-web
+**/release
+**/*.vsix
+.git
+apps/backend/tests

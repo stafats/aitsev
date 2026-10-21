@@ -1,0 +1,185 @@
+# Builds the Aitsev IDE (our VS Code fork) and attaches it to the GitHub release.
+# Runs on version tags (v1.2.3) or by hand (Actions → ide-release → Run workflow).
+#
+# Each build compiles VS Code from source: expect 60–120 minutes per platform. It needs about
+# 8 GB of memory, so private repositories should use larger runners: set the repository
+# variables IDE_RUNNER_WINDOWS / IDE_RUNNER_MACOS / IDE_RUNNER_LINUX to a runner label with
+# 16 GB (for example a "4-core" larger runner). Public repositories can use the defaults.
+#
+# Outputs on the release:
+#   Aitsev-IDE-Setup.exe          Windows installer (progress window, then launches Aitsev)
+#   Aitsev-IDE-mac-arm64.dmg      macOS (Apple silicon)
+#   Aitsev-IDE-linux-x64.deb / .tar.gz
+#
+# Optional signing secrets: WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD (Windows),
+# MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD / APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID (macOS).
+name: ide-release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach the IDE to (for example v0.6.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  AITSEV_DEFAULT_SERVER: ${{ vars.AITSEV_PUBLIC_URL || 'https://app.aitsev.com' }}
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  ide:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            runner: ${{ vars.IDE_RUNNER_WINDOWS || 'windows-latest' }}
+          - os: macos
+            runner: ${{ vars.IDE_RUNNER_MACOS || 'macos-latest' }}
+          - os: linux
+            runner: ${{ vars.IDE_RUNNER_LINUX || 'ubuntu-22.04' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: VS Code version
+        id: vscode
+        shell: bash
+        run: echo "ref=$(tr -d '[:space:]' < ide/vscode-version.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: microsoft/vscode
+          ref: ${{ steps.vscode.outputs.ref }}
+          path: vscode
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: vscode/.nvmrc
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Linux build dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev fakeroot rpm dpkg
+
+      - name: Build the Aitsev extension
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile
+          node scripts/set-default-server.mjs "$AITSEV_DEFAULT_SERVER"
+          pnpm --filter aitsev-vscode run package
+      - name: Apply Aitsev branding to VS Code
+        run: node ide/prepare.mjs --vscode vscode
+      - name: Install VS Code dependencies
+        working-directory: vscode
+        shell: bash
+        run: npm ci
+        env:
+          npm_config_arch: x64
+
+      # ---------------------------------------------------------------- Windows
+      - name: Compile (Windows)
+        if: matrix.os == 'windows'
+        working-directory: vscode
+        run: npm run gulp vscode-win32-x64-min
+      - name: Add built-in extensions (Windows)
+        if: matrix.os == 'windows'
+        run: node ide/install-extensions.mjs --app VSCode-win32-x64 --vsix apps/vscode/aitsev.vsix
+        # gulp writes the app next to the vscode folder
+        working-directory: ${{ github.workspace }}
+      - name: Sign the app (Windows, optional)
+        if: matrix.os == 'windows' && env.WIN_CSC_LINK != ''
+        shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("cert.pfx", [Convert]::FromBase64String($env:WIN_CSC_LINK))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+          & $signtool.FullName sign /f cert.pfx /p $env:WIN_CSC_KEY_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 "VSCode-win32-x64\Aitsev.exe"
+      - name: Installer (Windows)
+        if: matrix.os == 'windows'
+        working-directory: vscode
+        run: |
+          npm run gulp vscode-win32-x64-inno-updater
+          npm run gulp vscode-win32-x64-user-setup
+      - name: Sign the installer (Windows, optional)
+        if: matrix.os == 'windows' && env.WIN_CSC_LINK != ''
+        shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+          & $signtool.FullName sign /f cert.pfx /p $env:WIN_CSC_KEY_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 "vscode\.build\win32-x64\user-setup\Aitsev-Setup.exe"
+      - name: Collect (Windows)
+        if: matrix.os == 'windows'
+        shell: bash
+        run: |
+          mkdir -p out
+          cp vscode/.build/win32-x64/user-setup/Aitsev-Setup.exe out/Aitsev-IDE-Setup.exe
+
+      # ---------------------------------------------------------------- macOS
+      - name: Compile (macOS)
+        if: matrix.os == 'macos'
+        working-directory: vscode
+        run: npm run gulp vscode-darwin-arm64-min
+        env:
+          npm_config_arch: arm64
+      - name: Package (macOS)
+        if: matrix.os == 'macos'
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP="VSCode-darwin-arm64/Aitsev.app"
+          node ide/install-extensions.mjs --app "$APP" --vsix apps/vscode/aitsev.vsix
+          if [ -n "$MAC_CSC_LINK" ]; then
+            echo "$MAC_CSC_LINK" | base64 --decode > cert.p12
+            security create-keychain -p ci build.keychain
+            security default-keychain -s build.keychain
+            security unlock-keychain -p ci build.keychain
+            security import cert.p12 -k build.keychain -P "$MAC_CSC_KEY_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+            IDENTITY=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
+            codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" "$APP"
+          fi
+          mkdir -p out
+          hdiutil create -volname "Aitsev" -srcfolder "$APP" -ov -format UDZO out/Aitsev-IDE-mac-arm64.dmg
+          if [ -n "$APPLE_ID" ] && [ -n "$MAC_CSC_LINK" ]; then
+            xcrun notarytool submit out/Aitsev-IDE-mac-arm64.dmg --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple out/Aitsev-IDE-mac-arm64.dmg
+          fi
+
+      # ---------------------------------------------------------------- Linux
+      - name: Compile (Linux)
+        if: matrix.os == 'linux'
+        working-directory: vscode
+        run: npm run gulp vscode-linux-x64-min
+      - name: Package (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          node ide/install-extensions.mjs --app VSCode-linux-x64 --vsix apps/vscode/aitsev.vsix
+          (cd vscode && npm run gulp vscode-linux-x64-prepare-deb && npm run gulp vscode-linux-x64-build-deb)
+          mkdir -p out
+          cp vscode/.build/linux/deb/amd64/deb/*.deb out/Aitsev-IDE-linux-x64.deb
+          tar -czf out/Aitsev-IDE-linux-x64.tar.gz -C . VSCode-linux-x64
+
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --title "Aitsev $RELEASE_TAG" --notes "Download Aitsev below."
+          gh release upload "$RELEASE_TAG" out/* --clobber

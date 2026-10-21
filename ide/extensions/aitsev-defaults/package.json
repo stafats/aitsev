@@ -1,0 +1,18 @@
+{
+  "name": "aitsev-defaults",
+  "displayName": "Aitsev defaults",
+  "description": "Default settings for the Aitsev IDE: Aitsev chat is the AI, no telemetry.",
+  "version": "1.0.0",
+  "publisher": "aitsev",
+  "license": "MIT",
+  "engines": { "vscode": "^1.95.0" },
+  "categories": ["Other"],
+  "contributes": {
+    "configurationDefaults": {
+      "chat.disableAIFeatures": true,
+      "telemetry.telemetryLevel": "off",
+      "workbench.secondarySideBar.defaultVisibility": "hidden",
+      "update.mode": "none"
+    }
+  }
+}

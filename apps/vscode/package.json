@@ -1,0 +1,295 @@
+{
+  "name": "aitsev-vscode",
+  "displayName": "Aitsev",
+  "description": "Kiro-style AI coding: chat with your code, let several AI models edit it (Autopilot or Supervised), verified in a sandbox.",
+  "version": "0.5.0",
+  "publisher": "aitsev",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stafats/aitsev"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Testing"
+  ],
+  "keywords": [
+    "ai",
+    "code generation",
+    "multi-model",
+    "ollama",
+    "verification"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aitsev",
+          "title": "Aitsev",
+          "icon": "media/aitsev.svg"
+        }
+      ]
+    },
+    "views": {
+      "aitsev": [
+        {
+          "type": "webview",
+          "id": "aitsev.chat",
+          "name": "Chat"
+        },
+        {
+          "type": "webview",
+          "id": "aitsev.panel",
+          "name": "Tasks"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aitsev.openChat",
+        "title": "Open Chat",
+        "category": "Aitsev",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "aitsev.newChat",
+        "title": "New Chat",
+        "category": "Aitsev",
+        "icon": "$(add)"
+      },
+      {
+        "command": "aitsev.askAboutSelection",
+        "title": "Ask About Selection",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.analyzeNow",
+        "title": "Analyze Project Now",
+        "category": "Aitsev",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "aitsev.fixSuggestion",
+        "title": "Fix Suggestion",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.signIn",
+        "title": "Sign In with Browser",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.chooseModels",
+        "title": "Choose Models",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.newTask",
+        "title": "New Task",
+        "category": "Aitsev",
+        "icon": "$(add)"
+      },
+      {
+        "command": "aitsev.newTaskForFiles",
+        "title": "New Task for These Files",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.setApiKey",
+        "title": "Sign In with API Key",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.clearApiKey",
+        "title": "Sign Out",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.checkConnection",
+        "title": "Check Server Connection",
+        "category": "Aitsev"
+      },
+      {
+        "command": "aitsev.refresh",
+        "title": "Refresh Tasks",
+        "category": "Aitsev",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "aitsev.newChat",
+          "when": "view == aitsev.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aitsev.analyzeNow",
+          "when": "view == aitsev.chat",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aitsev.newTask",
+          "when": "view == aitsev.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aitsev.refresh",
+          "when": "view == aitsev.panel",
+          "group": "navigation@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "aitsev.newTaskForFiles",
+          "when": "!explorerResourceIsFolder",
+          "group": "z_aitsev"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "aitsev.askAboutSelection",
+          "when": "editorHasSelection",
+          "group": "z_aitsev@0"
+        },
+        {
+          "command": "aitsev.newTaskForFiles",
+          "group": "z_aitsev"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "aitsev.fixSuggestion",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Aitsev",
+      "properties": {
+        "aitsev.serverUrl": {
+          "type": "string",
+          "default": "https://app.aitsev.com",
+          "description": "URL of the Aitsev server. Leave as is for the Aitsev cloud; use http://localhost:8000 for a server on this computer."
+        },
+        "aitsev.defaultSize": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "small",
+            "normal",
+            "large"
+          ],
+          "default": "auto",
+          "description": "How many models work on a task: small = 1, normal = 2, large = 3. Auto lets the planner decide."
+        },
+        "aitsev.setupCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Commands that install dependencies in the sandbox (network allowed). Empty = detect automatically."
+        },
+        "aitsev.verifyCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Build, lint and test commands that must pass (no network). Empty = detect automatically."
+        },
+        "aitsev.sandboxImage": {
+          "type": "string",
+          "default": "",
+          "description": "Docker image for the sandbox. Empty = detect (python:3.12-slim or node:22-slim)."
+        },
+        "aitsev.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra gitignore-style patterns to never upload. .env files, keys and build folders are always excluded."
+        },
+        "aitsev.maxContextKb": {
+          "type": "number",
+          "default": 400,
+          "minimum": 20,
+          "description": "Maximum size of the files the models read (the server's limit applies too)."
+        },
+        "aitsev.createBranch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Create a new git branch before applying an approved result."
+        },
+        "aitsev.autoCommit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Commit the applied files on that branch automatically."
+        },
+        "aitsev.pollIntervalSeconds": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "How often running tasks are refreshed."
+        },
+        "aitsev.backgroundAnalysis": {
+          "type": "boolean",
+          "default": true,
+          "description": "Analyse the open project in the background (on open and after saves) and show suggestions as squiggles and in the chat."
+        },
+        "aitsev.analysisMaxKb": {
+          "type": "number",
+          "default": 120,
+          "minimum": 10,
+          "maximum": 400,
+          "description": "How much code (KB) background analysis sends per run."
+        },
+        "aitsev.chat.verifyEdits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Agent mode: run the project's tests in the sandbox before showing edits (the whole project is uploaded for this)."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "aitsev.openChat",
+        "key": "ctrl+l",
+        "mac": "cmd+l"
+      },
+      {
+        "command": "aitsev.askAboutSelection",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "when": "editorHasSelection"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "package": "node esbuild.mjs --production && vsce package --no-dependencies --out aitsev.vsix"
+  },
+  "dependencies": {
+    "@aitsev/agent-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  }
+}

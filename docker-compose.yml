@@ -1,0 +1,48 @@
+# Local stack: PostgreSQL (with pgvector for later phases) + the Aitsev API.
+#   cp .env.example .env   # fill in OLLAMA_API_KEY and AITSEV_API_KEYS
+#   docker compose up --build
+# API docs: http://localhost:8000/docs
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: aitsev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aitsev-local-only}
+      POSTGRES_DB: aitsev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitsev -d aitsev"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    env_file: .env
+    environment:
+      AITSEV_DATABASE_URL: postgresql+asyncpg://aitsev:${POSTGRES_PASSWORD:-aitsev-local-only}@db:5432/aitsev
+      AITSEV_SANDBOX_MODE: docker
+      # Sandbox workspaces must exist at the same path inside this container and on the
+      # Docker host, because the sandbox containers are started by the host's Docker daemon.
+      AITSEV_SANDBOX_WORK_ROOT: /tmp/aitsev-sandbox
+    # root is needed to use the host Docker socket; the sandbox containers themselves run
+    # without capabilities, without network for verify commands, and with resource limits.
+    user: "0:0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/aitsev-sandbox:/tmp/aitsev-sandbox
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

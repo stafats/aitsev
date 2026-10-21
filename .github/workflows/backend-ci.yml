@@ -1,0 +1,58 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/backend/**", "apps/desktop/src/**", ".github/workflows/backend-ci.yml"]
+  pull_request:
+    paths: ["apps/backend/**", "apps/desktop/src/**", ".github/workflows/backend-ci.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install (from uv.lock)
+        run: uv sync --frozen
+      - name: Lint
+        run: |
+          uv run --frozen ruff check src tests migrations
+          uv run --frozen ruff format --check src tests migrations
+      - name: Type check
+        run: uv run --frozen mypy
+      - name: Tests (including the real Docker sandbox)
+        run: |
+          docker pull python:3.12-slim
+          uv run --frozen pytest --cov --cov-report=term-missing:skip-covered
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run --frozen mypy --platform win32
+      - name: Tests (portable subset)
+        run: uv run --frozen pytest tests/test_parsing.py tests/test_workspace.py tests/test_gateway.py tests/test_config.py -q -p no:cacheprovider --no-cov
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t aitsev-backend:ci -f apps/backend/Dockerfile .

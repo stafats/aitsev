@@ -1,0 +1,66 @@
+name: extension-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/vscode/**", "packages/**", "apps/backend/**", "pnpm-lock.yaml", ".github/workflows/extension-ci.yml"]
+  pull_request:
+    paths: ["apps/vscode/**", "packages/**", "apps/backend/**", "pnpm-lock.yaml", ".github/workflows/extension-ci.yml"]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run typecheck
+      - run: pnpm -r run test
+
+  end-to-end:
+    # Bundled extension + real backend + real sandbox, with a fake model server.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: pnpm install --frozen-lockfile
+      - name: Backend environment
+        working-directory: apps/backend
+        run: uv sync --frozen
+      - name: End-to-end tests
+        working-directory: apps/vscode
+        env:
+          AITSEV_E2E: "1"
+        run: pnpm exec vitest run
+
+  package:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package:vscode
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aitsev-vsix
+          path: apps/vscode/aitsev.vsix

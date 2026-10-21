@@ -1,0 +1,58 @@
+name: desktop-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/desktop/**", "pnpm-lock.yaml", ".github/workflows/desktop-ci.yml"]
+  pull_request:
+    paths: ["apps/desktop/**", "pnpm-lock.yaml", ".github/workflows/desktop-ci.yml"]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      - name: Launch smoke test (Linux, virtual display)
+        if: runner.os == 'Linux'
+        run: |
+          node build.mjs
+          xvfb-run -a pnpm exec electron . --smoke --no-sandbox | tee smoke.log
+          grep -q AITSEV_SMOKE_OK smoke.log
+
+  installer:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the Windows installer (unsigned)
+        run: pnpm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aitsev-desktop-windows
+          path: apps/desktop/release/*.exe

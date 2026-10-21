@@ -1,0 +1,159 @@
+# Public release: push a tag like v0.5.0. This publishes:
+#   * the desktop installers on GitHub Releases: Aitsev-Setup.exe (Windows, one-click with a
+#     progress window), Aitsev-mac-arm64.dmg / Aitsev-mac-x64.dmg, Aitsev-linux.AppImage.
+#     Each installer carries the editor extension, and installed apps update themselves.
+#   * the editor extension: aitsev.vsix on the release, plus the VS Code Marketplace and Open VSX
+#     (the store used by Cursor, Kiro, Windsurf and VSCodium) when their tokens are set
+#   * the server image (API + web app) on GitHub Container Registry
+#
+# Repository variable (Settings → Secrets and variables → Actions → Variables):
+#   AITSEV_PUBLIC_URL   the address of your hosted server, e.g. https://app.aitsev.com
+#                       (the apps and the extension connect there by default)
+# Optional secrets (each switches a feature on):
+#   WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD         Windows code signing (.pfx as base64, password)
+#   MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD         Apple "Developer ID Application" certificate (.p12 as base64)
+#   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   macOS notarization
+#   VSCE_PAT                                     VS Code Marketplace token (publisher "aitsev")
+#   OVSX_PAT                                     Open VSX token
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  AITSEV_DEFAULT_SERVER: ${{ vars.AITSEV_PUBLIC_URL || 'https://app.aitsev.com' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the app versions
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for f in apps/desktop/package.json apps/vscode/package.json; do
+            v=$(node -p "require('./$f').version")
+            [ "$v" = "$tag" ] || { echo "::error::$f is $v but the tag is $tag"; exit 1; }
+          done
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Aitsev $GITHUB_REF_NAME" --notes "Download Aitsev for Windows, macOS or Linux below."
+
+  desktop:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Point the extension at the hosted server
+        shell: bash
+        run: node scripts/set-default-server.mjs "$AITSEV_DEFAULT_SERVER"
+      - name: Test
+        working-directory: apps/desktop
+        run: |
+          pnpm run typecheck
+          pnpm run test
+      - name: Bundle the editor extension
+        run: pnpm --filter aitsev-vscode run package
+      - name: Signing setup
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ] && [ -n "$WIN_CSC_LINK" ]; then echo "Windows signing on"
+          elif [ "$RUNNER_OS" = "macOS" ] && [ -n "$MAC_CSC_LINK" ]; then echo "macOS signing on"
+          else echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"; echo "::warning::Building $RUNNER_OS unsigned"; fi
+          if [ "$RUNNER_OS" = "macOS" ] && [ -z "$APPLE_ID" ]; then echo "AITSEV_SKIP_NOTARIZE=1" >> "$GITHUB_ENV"; fi
+      - name: Build and publish installers
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          node build.mjs --production
+          node scripts/release-config.mjs
+          pnpm exec electron-builder --config electron-builder.release.json --publish always
+
+  extension:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/set-default-server.mjs "$AITSEV_DEFAULT_SERVER"
+      - name: Test and package
+        working-directory: apps/vscode
+        run: |
+          pnpm run typecheck
+          pnpm run test
+          pnpm run package
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" apps/vscode/aitsev.vsix --clobber
+      - name: Publish to the VS Code Marketplace
+        working-directory: apps/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then echo "::warning::VSCE_PAT not set: skipping the Marketplace"; exit 0; fi
+          pnpm exec vsce publish --packagePath aitsev.vsix
+      - name: Publish to Open VSX (Cursor, Kiro, Windsurf, VSCodium)
+        working-directory: apps/vscode
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then echo "::warning::OVSX_PAT not set: skipping Open VSX"; exit 0; fi
+          npx --yes ovsx@0.10.1 publish aitsev.vsix --pat "$OVSX_PAT"
+
+  server-image:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/server" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.name.outputs.image }}:${{ github.ref_name }}
+            ${{ steps.name.outputs.image }}:latest

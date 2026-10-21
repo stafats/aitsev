@@ -1,0 +1,14 @@
+packages:
+  - "packages/*"
+  - "apps/vscode"
+  - "apps/desktop"
+
+# Allow only these dependencies to run install scripts (pnpm blocks all others).
+onlyBuiltDependencies:
+  - esbuild
+  - "@vscode/vsce-sign"
+  - electron
+
+# Not needed (Squirrel installers are not used); listed so pnpm does not ask.
+ignoredBuiltDependencies:
+  - electron-winstaller
